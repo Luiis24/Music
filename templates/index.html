@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bajar video</title>
+  <style>
+    :root {
+      --bg: #f3efe6;
+      --ink: #1c1915;
+      --muted: #6d6458;
+      --card: #fffdf8;
+      --line: #e4dccb;
+      --accent: #c4541a;
+      --accent-ink: #fff8f3;
+      --mp3: #1f6b4a;
+      --shadow: 0 18px 50px rgba(70, 48, 18, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, #fff 0, transparent 28rem),
+        var(--bg);
+      font: 16px/1.5 "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(640px, calc(100% - 32px));
+      margin: 10vh auto 48px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 2.2rem;
+      letter-spacing: -0.04em;
+    }
+
+    .lede {
+      margin: 0 0 28px;
+      color: var(--muted);
+    }
+
+    form, .dialog {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    form { padding: 22px; }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+
+    input[type="url"] {
+      width: 100%;
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    input:focus {
+      outline: 2px solid #efd3c2;
+      border-color: var(--accent);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 12px;
+      padding: 13px 16px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    .mp3 { background: var(--mp3); color: white; }
+    .mp4 { background: var(--accent); color: var(--accent-ink); }
+    .ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .status {
+      min-height: 1.4em;
+      margin: 14px 4px 0;
+      color: var(--muted);
+    }
+
+    .status.error { color: #9d2c2c; }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      padding: 20px;
+      background: rgba(28, 25, 21, 0.35);
+    }
+
+    .overlay.open { display: grid; }
+
+    .dialog {
+      width: min(440px, 100%);
+      padding: 22px;
+    }
+
+    .dialog h2 {
+      margin: 0 0 4px;
+      font-size: 1.25rem;
+    }
+
+    .dialog p {
+      margin: 0 0 16px;
+      color: var(--muted);
+    }
+
+    .qualities {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .qualities label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .dialog-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    @media (max-width: 560px) {
+      .actions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Bajar video</h1>
+    <p class="lede">Pega el enlace de YouTube, Facebook u otro sitio y elige si lo quieres en audio o en video.</p>
+    <form id="form">
+      <label for="url">Enlace</label>
+      <input id="url" type="url" name="url" placeholder="https://..." required autocomplete="off">
+      <div class="actions">
+        <button class="mp3" type="submit" data-kind="mp3">Descargar MP3</button>
+        <button class="mp4" type="button" id="mp4">Descargar MP4</button>
+      </div>
+    </form>
+    <p class="status" id="status" role="status"></p>
+  </main>
+
+  <div class="overlay" id="overlay">
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="quality-title">
+      <h2 id="quality-title">Calidad del video</h2>
+      <p id="video-title"></p>
+      <div class="qualities" id="qualities"></div>
+      <div class="dialog-actions">
+        <button class="ghost" type="button" id="cancel">Cancelar</button>
+        <button class="mp4" type="button" id="confirm">Descargar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const form = document.querySelector("#form");
+    const urlInput = document.querySelector("#url");
+    const statusEl = document.querySelector("#status");
+    const overlay = document.querySelector("#overlay");
+    const qualitiesEl = document.querySelector("#qualities");
+    const titleEl = document.querySelector("#video-title");
+    const buttons = [...document.querySelectorAll("button")];
+
+    function setStatus(message, isError = false) {
+      statusEl.textContent = message;
+      statusEl.classList.toggle("error", isError);
+    }
+
+    function setBusy(busy) {
+      buttons.forEach((button) => {
+        button.disabled = busy;
+      });
+    }
+
+    function filenameFrom(response) {
+      const header = response.headers.get("Content-Disposition") || "";
+      const match = header.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      const raw = decodeURIComponent(match?.[1] || match?.[2] || "descarga");
+      return raw;
+    }
+
+    async function download(kind, height) {
+      setBusy(true);
+      setStatus(kind === "mp3" ? "Preparando el MP3…" : "Preparando el MP4…");
+      try {
+        const response = await fetch("/api/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: urlInput.value.trim(), kind, height }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error || "No se pudo descargar.");
+        }
+        const blob = await response.blob();
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filenameFrom(response);
+        link.click();
+        URL.revokeObjectURL(link.href);
+        setStatus("Listo. Revisa tu carpeta de descargas.");
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      download("mp3");
+    });
+
+    document.querySelector("#mp4").addEventListener("click", async () => {
+      if (!form.reportValidity()) return;
+      setBusy(true);
+      setStatus("Buscando calidades…");
+      try {
+        const response = await fetch("/api/qualities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: urlInput.value.trim() }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "No se pudo leer el video.");
+        titleEl.textContent = data.title;
+        qualitiesEl.innerHTML = "";
+        data.qualities.forEach((quality, index) => {
+          const label = document.createElement("label");
+          label.innerHTML = `<input type="radio" name="quality" value="${quality.height}" ${index === 0 ? "checked" : ""}> ${quality.label}`;
+          qualitiesEl.appendChild(label);
+        });
+        overlay.classList.add("open");
+        setStatus("");
+      } catch (error) {
+        setStatus(error.message, true);
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    document.querySelector("#cancel").addEventListener("click", () => {
+      overlay.classList.remove("open");
+    });
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) overlay.classList.remove("open");
+    });
+
+    document.querySelector("#confirm").addEventListener("click", () => {
+      const selected = document.querySelector('input[name="quality"]:checked');
+      if (!selected) return;
+      overlay.classList.remove("open");
+      download("mp4", Number(selected.value));
+    });
+  </script>
+</body>
+</html>
