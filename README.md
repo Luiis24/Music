@@ -1,8 +1,8 @@
-# Bajar video
+# Descargar música y video
 
-Página local con un campo de enlace y dos acciones: **Descargar MP3** y **Descargar MP4**. El MP3 se baja directo. El MP4 pregunta la calidad antes de guardar el archivo.
+Página local para descargar canciones en **MP3** o **OPUS** con portada y metadatos del artista, además de video en **MP4** con calidad seleccionable. Para audio se puede elegir una carpeta del equipo en navegadores compatibles.
 
-Usa [yt-dlp](https://github.com/yt-dlp/yt-dlp) para leer el video y un FFmpeg incluido en `imageio-ffmpeg` para unir video y audio o convertir a MP3. No hace falta instalar FFmpeg en el sistema.
+Usa [yt-dlp](https://github.com/yt-dlp/yt-dlp) para leer el video y un FFmpeg incluido en `imageio-ffmpeg` para unir video y audio, convertir a MP3/OPUS e incrustar portada y metadatos. No hace falta instalar FFmpeg en el sistema.
 
 ## Requisitos
 
@@ -44,9 +44,11 @@ En Debian/Ubuntu, el módulo `venv` a veces no viene instalado (`apt install pyt
 ## Uso
 
 1. Pega un enlace `http` o `https` de un video público.
-2. **Descargar MP3** convierte el mejor audio disponible a MP3 de 192 kbps.
-3. **Descargar MP4** consulta las resoluciones y muestra un diálogo. La más alta queda marcada. Al confirmar, baja video y audio y los entrega en un solo `.mp4`.
-4. El navegador guarda el archivo en su carpeta de descargas. El servidor no conserva una copia: usa un directorio temporal y lo borra al terminar de enviarlo.
+2. **Descargar MP3** convierte el mejor audio disponible a MP3 de 192 kbps. **Descargar OPUS** lo convierte a 96 kbps para reducir el tamaño.
+3. Las descargas de audio incluyen la portada y los metadatos disponibles, como título y artista.
+4. **Elegir carpeta para música** permite seleccionar dónde guardar los archivos de audio en navegadores compatibles. Si no está disponible, se usa la carpeta de descargas del navegador. La elección se conserva mientras la página permanezca abierta.
+5. **Descargar MP4** consulta las resoluciones y muestra un diálogo. La más alta queda marcada. Al confirmar, baja video y audio y los entrega en un solo `.mp4`.
+6. El servidor no conserva una copia: usa un directorio temporal y lo borra al terminar de enviar el archivo.
 
 Si el sitio no informa la altura del video, el diálogo ofrece **Mejor disponible**.
 
@@ -79,19 +81,27 @@ curl -sS -D - -o /tmp/flower.mp4 -X POST http://127.0.0.1:5050/api/download \
   -d '{"url":"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4","kind":"mp4","height":0}'
 file /tmp/flower.mp4
 
+# Descargar audio OPUS
+curl -sS -D - -o /tmp/flower.opus -X POST http://127.0.0.1:5050/api/download \
+  -H 'Content-Type: application/json' \
+  -d '{"url":"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4","kind":"opus"}'
+file /tmp/flower.opus
+
 curl -sS -D - -o /tmp/flower.mp3 -X POST http://127.0.0.1:5050/api/download \
   -H 'Content-Type: application/json' \
   -d '{"url":"https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4","kind":"mp3"}'
 file /tmp/flower.mp3
 ```
 
-En el navegador, el recorrido equivalente es: pegar el enlace, pulsar **Descargar MP4**, ver el diálogo, confirmar, y comprobar el texto "Listo. Revisa tu carpeta de descargas." Luego repetir con **Descargar MP3**.
+En el navegador, pega el enlace, elige una carpeta opcionalmente y selecciona **Descargar MP3** u **OPUS**. Para video, pulsa **Descargar MP4**, elige calidad y confirma.
 
 ## Estructura
 
 ```
 app.py              servidor y lógica de descarga
-templates/index.html  página, estilos y botones
+templates/index.html  estructura HTML
+static/css/style.css  estilos
+static/js/app.js      interacción y descargas
 requirements.txt    Flask, yt-dlp e imageio-ffmpeg
 run.sh              instala .vendor/ si falta y arranca
 .vendor/            dependencias locales; no se versiona
@@ -101,9 +111,11 @@ run.sh              instala .vendor/ si falta y arranca
 
 | Qué cambiar | Dónde |
 | --- | --- |
-| Textos, colores, diálogo de calidad | `templates/index.html` |
-| Puerto, validación del enlace, calidades, bitrate del MP3 | `app.py` |
-| Bitrate del MP3 | `preferredquality` en `app.py` (ahora `"192"`) |
+| Estructura y textos | `templates/index.html` |
+| Colores y estilos | `static/css/style.css` |
+| Interacción de la página | `static/js/app.js` |
+| Puerto, validación del enlace, calidades y bitrate | `app.py` |
+| Bitrate de audio | `preferredquality` en `app.py` (MP3 `"192"`, OPUS `"96"`) |
 | Cómo se elige el MP4 | `mp4_format()` en `app.py` |
 | Dependencias | `requirements.txt` y luego borrar `.vendor/` y volver a ejecutar `./run.sh` |
 
@@ -132,6 +144,10 @@ Respuesta:
 
 ```json
 { "url": "https://...", "kind": "mp3" }
+```
+
+```json
+{ "url": "https://...", "kind": "opus" }
 ```
 
 ```json

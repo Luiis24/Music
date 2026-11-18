@@ -121,8 +121,8 @@ def download():
     kind = data.get("kind")
     if not valid_url(url):
         return jsonify(error="Pega un enlace http o https."), 400
-    if kind not in {"mp3", "mp4"}:
-        return jsonify(error="Elige MP3 o MP4."), 400
+    if kind not in {"mp3", "opus", "mp4"}:
+        return jsonify(error="Elige MP3, OPUS o MP4."), 400
 
     height = 0
     if kind == "mp4":
@@ -135,16 +135,19 @@ def download():
 
     tmp = Path(tempfile.mkdtemp(prefix="bajar-"))
     outtmpl = str(tmp / "%(title).80B.%(ext)s")
-    if kind == "mp3":
+    if kind in {"mp3", "opus"}:
         opts = ydl_opts(
             format="bestaudio/best",
             outtmpl=outtmpl,
+            writethumbnail=True,
             postprocessors=[
                 {
                     "key": "FFmpegExtractAudio",
-                    "preferredcodec": "mp3",
-                    "preferredquality": "192",
-                }
+                    "preferredcodec": kind,
+                    "preferredquality": "192" if kind == "mp3" else "96",
+                },
+                {"key": "FFmpegMetadata"},
+                {"key": "EmbedThumbnail"},
             ],
         )
     else:
@@ -157,7 +160,12 @@ def download():
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             ydl.download([url])
-        files = [path for path in tmp.iterdir() if path.is_file()]
+        expected_suffix = f".{kind}"
+        files = [
+            path
+            for path in tmp.iterdir()
+            if path.is_file() and path.suffix.lower() == expected_suffix
+        ]
         if not files:
             raise RuntimeError("La descarga terminó sin archivo.")
     except DownloadError as exc:
